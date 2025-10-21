@@ -1,18 +1,11 @@
-import asyncio
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import Message
+import os
+from telegram.ext import ApplicationBuilder, CommandHandler
 
-TOKEN = "твой_токен_бота"
+TOKEN = os.getenv("BOT_TOKEN")
 
-bot = Bot(token=TOKEN)
-dp = Dispatcher()
+async def start(update, context):
+    await update.message.reply_text("Привет! Я твой бот 🎉")
 
-@dp.message()
-async def echo(message: Message):
-    await message.answer(f"Привет, {message.from_user.first_name}! Это Gift Royale 🖤")
-
-async def main():
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+app = ApplicationBuilder().token(TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.run_polling()
