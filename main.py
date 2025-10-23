@@ -3,7 +3,8 @@ import json
 import asyncio
 import aiohttp
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -33,55 +34,51 @@ def save_data(file, data):
 user_gifts = load_data(GIFTS_FILE)
 storage_gifts = load_data(STORAGE_FILE)
 
+
 @dp.message(CommandStart())
 async def start(message: types.Message):
     await message.answer(f"🎁 Привет, {message.from_user.first_name}!")
 
-@dp.message(Command("addgift"))
-async def add_gift(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        await message.answer("🚫 Нет прав")
-        return
 
-    args = message.text.split(maxsplit=3)
-    if len(args) < 4:
-        await message.answer("⚠️ /addgift <@username> <название> <фон>")
-        return
-
-    username, gift_name, gift_bg = args[1], args[2], args[3]
-    if not username.startswith("@"):
-        await message.answer("❌ username должен быть с @")
-        return
-
-    gift = {"name": gift_name, "bg": gift_bg}
-    user_gifts.setdefault(username, []).append(gift)
-    storage_gifts.setdefault(str(STORAGE_ID), []).append(gift)
-    save_data(GIFTS_FILE, user_gifts)
-    save_data(STORAGE_FILE, storage_gifts)
-
-    await message.answer(f"✅ Подарок *{gift_name}* выдан пользователю {username}", parse_mode="Markdown")
-
-@dp.message(Command("inventory"))
+@dp.message()
 async def inventory(message: types.Message):
     username = f"@{message.from_user.username}" if message.from_user.username else str(message.from_user.id)
     gifts = user_gifts.get(username, [])
     if not gifts:
         await message.answer("🎁 У вас пока нет подарков.")
         return
-    text = "🎁 Ваши подарки:\n\n" + "\n".join([f"- {g['name']} ({g['bg']})" for g in gifts])
-    await message.answer(text)
 
-@dp.message(Command("withdraw"))
-async def withdraw(message: types.Message):
-    username = f"@{message.from_user.username}" if message.from_user.username else str(message.from_user.id)
+    keyboard = InlineKeyboardMarkup(row_width=1)
+    for i, gift in enumerate(gifts):
+        button = InlineKeyboardButton(
+            text=f"{gift['name']} ({gift['bg']}) - вывести за 25⭐",
+            callback_data=f"withdraw_{i}"
+        )
+        keyboard.add(button)
+
+    await message.answer("🎁 Ваши подарки:", reply_markup=keyboard)
+
+
+@dp.callback_query()
+async def handle_withdraw(call: CallbackQuery):
+    username = f"@{call.from_user.username}" if call.from_user.username else str(call.from_user.id)
     gifts = user_gifts.get(username, [])
     if not gifts:
-        await message.answer("❌ Нет подарков для вывода")
+        await call.message.edit_text("❌ У вас нет подарков для вывода.")
         return
-    await message.answer(
-        f"💸 Чтобы вывести подарок, отправьте 25 звёзд на @giftroyaletransfer.\n"
-        f"После оплаты бот подтвердит вывод."
+
+    index = int(call.data.split("_")[1])
+    if index >= len(gifts):
+        await call.message.edit_text("❌ Некорректный подарок.")
+        return
+
+    gift = gifts[index]
+    await call.message.edit_text(
+        f"💸 Чтобы вывести {gift['name']}, отправьте 25⭐ на аккаунт @giftroyaletransfer.\n"
+        "После оплаты бот автоматически передаст NFT."
     )
+    # Логика автоматической проверки и передачи NFT должна быть реализована в check_transactions()
+
 
 async def check_transactions():
     last_tx = None
@@ -108,15 +105,20 @@ async def check_transactions():
                 stars = int(amount) / 1_000_000_000
 
                 if stars >= 25:
-                    await bot.send_message(ADMIN_ID, f"💰 Получено {stars} звёзд от {sender}\n✅ Вывод подтверждён")
+                    # Тут нужно найти, какой подарок выводит пользователь и передать NFT
+                    await bot.send_message(ADMIN_ID, f"💰 Получено {stars}⭐ от {sender}\n✅ Вывод подтверждён")
         except Exception as e:
             print("Ошибка проверки транзакций:", e)
 
         await asyncio.sleep(60)
 
+
 async def main():
     asyncio.create_task(check_transactions())
     await dp.start_polling(bot)
 
+
 if __name__ == "__main__":
     asyncio.run(main())
+    
+
