@@ -1,4 +1,4 @@
- ├── main.py
- ├── requirements.txt
- ├── .runtime.txt
- └── gifts.json
+main.py
+requirements.txt
+.runtime.txt
+gifts.json
